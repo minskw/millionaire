@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent scroll on projector view */
+}
+
+.hex-btn {
+  clip-path: polygon(10% 0, 90% 0, 100% 50%, 90% 100%, 10% 100%, 0% 50%);
+}
+
+/* Font definitions handled by Google Fonts import in HTML */
+.font-amiri {
+  font-family: 'Amiri', serif;
+  line-height: 1.6;
+}
+.font-orbitron {
+  font-family: 'Orbitron', sans-serif;
+}
+.font-cinzel {
+  font-family: 'Cinzel', serif;
+}
+.font-vt323 {
+  font-family: 'VT323', monospace;
+}
