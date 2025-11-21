@@ -1,0 +1,5 @@
+{
+  "name": "Classroom Millionaire",
+  "description": "A projector-friendly 'Who Wants to Be a Millionaire' game designed for classrooms. Features question importing and AI-powered question generation.",
+  "requestFramePermissions": []
+}
