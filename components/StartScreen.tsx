@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Question } from '../types';
 import { generateQuestions } from '../services/geminiService';
 import { THEMES, ThemeConfig } from '../themes';
-import { IconSparkles, IconUpload } from './Icons';
+import { IconSparkles, IconUpload, IconDownload } from './Icons';
 
 interface StartScreenProps {
   onStartGame: (questions: Question[], topic: string | undefined, theme: ThemeConfig) => void;
@@ -62,6 +62,27 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    const template = [
+      {
+        question: "Contoh Pertanyaan: Siapakah penemu lampu pijar?",
+        options: ["Thomas Alva Edison", "Nikola Tesla", "Alexander Graham Bell", "Albert Einstein"],
+        correctAnswerIndex: 0,
+        difficulty: "easy",
+        explanation: "Thomas Edison mematenkan lampu pijar komersial pertama."
+      }
+    ];
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "template_soal.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -132,12 +153,24 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                   onChange={handleFileUpload}
                   className="hidden"
                 />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`w-full px-6 py-3 font-bold rounded-lg transition-colors ${theme.btnSecondary}`}
-                >
-                  Select JSON File
-                </button>
+                <div className="flex gap-2">
+                    <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex-1 px-4 py-3 font-bold rounded-lg transition-colors ${theme.btnSecondary}`}
+                    >
+                    Select JSON File
+                    </button>
+                     <button
+                    onClick={handleDownloadTemplate}
+                    title="Download Template"
+                    className={`px-4 py-3 font-bold rounded-lg transition-colors ${theme.btnSecondary}`}
+                    >
+                     <IconDownload className="w-5 h-5" />
+                    </button>
+                </div>
+                <p className={`text-xs mt-3 ${theme.textMuted} opacity-70`}>
+                    Supports JSON format. Use the download button for a template.
+                </p>
             </div>
 
           </div>
