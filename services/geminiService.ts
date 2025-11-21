@@ -1,10 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Question } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// We do NOT initialize 'ai' at the top level anymore.
+// This prevents the "White Screen" crash if the API key is missing/undefined when the app loads.
 
 export const generateQuestions = async (topic: string, subTopic: string = '', count: number = 15): Promise<Question[]> => {
   try {
+    // Access the key using Vite's standard method
+    // Note: You must name your environment variable VITE_API_KEY in Vercel/Netlify/Local
+    const apiKey = import.meta.env.VITE_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("API Key is missing. Please check your settings and ensure 'VITE_API_KEY' is set.");
+    }
+
+    // Initialize the AI client only when needed
+    const ai = new GoogleGenAI({ apiKey });
+
     const prompt = `Generate ${count} multiple-choice questions about "${topic}"${subTopic ? ` specifically focusing on "${subTopic}"` : ''} for a "Who Wants to Be a Millionaire" game. 
       The questions must range from very easy (for the first 5), medium (next 5), to very hard (last 5).
       Provide 4 options for each question. Ensure the correct answer is accurate.
