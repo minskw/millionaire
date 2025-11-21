@@ -6,27 +6,31 @@ import { IconSparkles, IconUpload } from './Icons';
 
 interface StartScreenProps {
   onStartGame: (questions: Question[], topic: string | undefined, theme: ThemeConfig) => void;
+  currentTheme: ThemeConfig;
+  onThemeChange: (theme: ThemeConfig) => void;
 }
 
-export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
+export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTheme, onThemeChange }) => {
   const [topic, setTopic] = useState('');
+  const [subTopic, setSubTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedThemeId, setSelectedThemeId] = useState<string>('classic');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const theme = THEMES[selectedThemeId];
+  // Use the passed theme prop instead of local state
+  const theme = currentTheme;
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
     setIsLoading(true);
     setError('');
     try {
-      const questions = await generateQuestions(topic);
+      const questions = await generateQuestions(topic, subTopic);
       if (questions.length < 5) {
         setError("Gemini did not generate enough questions. Try a broader topic.");
       } else {
-        onStartGame(questions, topic, theme);
+        const fullTopic = subTopic.trim() ? `${topic} (${subTopic})` : topic;
+        onStartGame(questions, fullTopic, theme);
       }
     } catch (err) {
       setError("Failed to generate questions. Please check your API key or connection.");
@@ -61,9 +65,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   };
 
   return (
-    <div className={`flex flex-col items-center justify-center min-h-screen p-4 md:p-8 transition-colors duration-700 ${theme.appBg} ${theme.font}`}>
+    <div className={`flex flex-col items-center justify-center w-full h-full overflow-y-auto p-4 md:p-8`}>
       
-      <div className={`max-w-5xl w-full ${theme.panelBg} ${theme.panelBorder} p-8 md:p-12 rounded-3xl shadow-2xl text-center transition-all duration-300`}>
+      <div className={`max-w-5xl w-full ${theme.panelBg} ${theme.panelBorder} p-8 md:p-12 rounded-3xl shadow-2xl text-center transition-all duration-300 my-auto`}>
         <h1 className={`text-5xl md:text-7xl font-black mb-2 uppercase tracking-tight drop-shadow-sm ${theme.textAccent}`}>
           Classroom<br/>Millionaire
         </h1>
@@ -77,21 +81,39 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
             {/* Theme Selector */}
             <div>
                 <h3 className={`text-sm font-bold uppercase tracking-widest mb-4 ${theme.textMuted}`}>Visual Style</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                     {Object.values(THEMES).map((t) => (
                         <button
                             key={t.id}
-                            onClick={() => setSelectedThemeId(t.id)}
+                            onClick={() => onThemeChange(t)}
                             className={`
-                                p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all duration-200
-                                ${selectedThemeId === t.id 
-                                    ? `${theme.optionSelected} scale-[1.02]` 
-                                    : `${theme.inputBg} hover:bg-opacity-70`
+                                relative h-24 rounded-xl overflow-hidden border-2 transition-all duration-300 group text-left
+                                ${theme.id === t.id 
+                                    ? 'border-white ring-2 ring-offset-2 ring-offset-black/50 scale-105 z-10 opacity-100 shadow-xl' 
+                                    : 'border-white/10 opacity-60 hover:opacity-100 hover:scale-105 hover:border-white/30 grayscale-[0.3] hover:grayscale-0'
                                 }
                             `}
                         >
-                            <span className="text-3xl opacity-90">{t.icon}</span>
-                            <span className="text-xs font-bold uppercase tracking-wider">{t.name}</span>
+                            {/* Preview Background */}
+                            <div className={`absolute inset-0 ${t.appBg}`} />
+                            
+                            {/* Preview Elements */}
+                            <div className={`absolute top-2 left-2 right-12 h-2 rounded-full border ${t.panelBorder} ${t.panelBg} opacity-50`} />
+                            <div className={`absolute top-6 left-2 w-12 h-2 rounded-full border ${t.panelBorder} ${t.btnPrimary} opacity-50`} />
+
+                            {/* Theme Icon */}
+                            <div className={`absolute top-2 right-2 p-1.5 rounded-lg border ${t.panelBorder} ${t.panelBg} ${t.textAccent} shadow-sm`}>
+                                {t.icon}
+                            </div>
+
+                            {/* Theme Name Label */}
+                            <div className={`absolute bottom-0 inset-x-0 p-2 border-t ${t.panelBorder} ${t.panelBg} backdrop-blur-md flex items-center justify-between`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${t.textMain}`}>
+                                    {t.name}
+                                </span>
+                                {/* Small color dot for accent */}
+                                <div className={`w-2 h-2 rounded-full ${t.btnPrimary}`}></div>
+                            </div>
                         </button>
                     ))}
                 </div>
@@ -130,32 +152,53 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
               <IconSparkles className="w-6 h-6" />
               <span>AI Generator</span>
             </h3>
-            <p className={`${theme.textMuted} text-sm mb-8 leading-relaxed`}>
-              Instantly create a game by topic. The AI will generate 15 questions ranging from easy to hard.
+            <p className={`${theme.textMuted} text-sm mb-6 leading-relaxed`}>
+              Instantly create a game. The AI will generate 15 questions ranging from easy to hard.
             </p>
             
             <div className="flex flex-col gap-4 flex-grow justify-center z-10">
-              <label className={`text-xs uppercase font-bold tracking-widest ${theme.textMuted}`}>Topic</label>
-              <input
-                type="text"
-                dir="auto"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g., Photosynthesis, World War II"
-                className={`w-full px-6 py-5 text-lg rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-all ${theme.inputBg}`}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-              />
-              <button
-                onClick={handleGenerate}
-                disabled={isLoading || !topic}
-                className={`w-full px-6 py-5 text-lg font-bold rounded-xl transition-all transform hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-4 ${theme.btnPrimary}`}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center gap-2">
-                     <span className="animate-spin">✦</span> Generating...
-                  </span>
-                ) : 'Generate Quiz'}
-              </button>
+              <div className="space-y-2">
+                  <label className={`text-xs uppercase font-bold tracking-widest ${theme.textMuted}`}>Main Topic</label>
+                  <input
+                    type="text"
+                    dir="auto"
+                    value={topic}
+                    disabled={isLoading}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g., History, Biology, Math"
+                    className={`w-full px-6 py-3 text-lg rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-all ${theme.inputBg} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleGenerate()}
+                  />
+              </div>
+
+              <div className="space-y-2">
+                  <label className={`text-xs uppercase font-bold tracking-widest ${theme.textMuted}`}>Keywords / Focus (Optional)</label>
+                  <input
+                    type="text"
+                    dir="auto"
+                    value={subTopic}
+                    disabled={isLoading}
+                    onChange={(e) => setSubTopic(e.target.value)}
+                    placeholder="e.g., WWII, Photosynthesis, Fractions"
+                    className={`w-full px-6 py-3 text-lg rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-all ${theme.inputBg} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleGenerate()}
+                  />
+              </div>
+
+              {isLoading ? (
+                 <div className={`w-full px-6 py-4 mt-2 rounded-xl border ${theme.panelBorder} bg-black/20 flex items-center justify-center gap-3 cursor-wait shadow-inner`}>
+                    <IconSparkles className={`w-6 h-6 animate-spin ${theme.textAccent}`} />
+                    <span className={`${theme.textMain} font-bold tracking-wide animate-pulse`}>Generating Quiz...</span>
+                 </div>
+              ) : (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!topic}
+                    className={`w-full px-6 py-4 text-lg font-bold rounded-xl transition-all transform hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-2 ${theme.btnPrimary}`}
+                  >
+                    Generate Quiz
+                  </button>
+              )}
             </div>
           </div>
 

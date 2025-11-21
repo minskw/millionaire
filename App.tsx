@@ -4,6 +4,7 @@ import { MoneyLadder } from './components/MoneyLadder';
 import { Lifelines } from './components/Lifelines';
 import { AudienceInteraction } from './components/AudienceInteraction';
 import { StudentSpotlight } from './components/StudentSpotlight';
+import { QuestionDisplay } from './components/QuestionDisplay';
 import { Question, GameState, MONEY_LADDER, SAFETY_NETS } from './types';
 import { generateQuestions } from './services/geminiService';
 import { playSound } from './services/soundService';
@@ -15,8 +16,6 @@ type OverlayState =
   | { type: 'message', title: string, text: string }
   | { type: 'audience' }
   | { type: 'friend' };
-
-const isArabic = (text: string) => /[\u0600-\u06FF]/.test(text);
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
@@ -71,6 +70,7 @@ const App: React.FC = () => {
 
       if (isCorrect) {
         playSound('correct');
+        playSound('cheer');
         const newMoney = MONEY_LADDER[gameState.currentQuestionIndex];
         
         if (gameState.currentQuestionIndex === gameState.questions.length - 1) {
@@ -201,166 +201,120 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [timeLeft, gameState.status, gameState.isAnswerRevealed, overlay.type, gameState.currentQuestionIndex]);
 
-
-  if (gameState.status === 'menu') {
-    return <StartScreen onStartGame={startGame} />;
-  }
-
   const currentQuestion = gameState.questions[gameState.currentQuestionIndex];
-  const questionText = currentQuestion?.question || "";
-  const isQArabic = isArabic(questionText);
 
   return (
     <div className={`flex h-screen overflow-hidden select-none transition-colors duration-700 ${currentTheme.appBg} ${currentTheme.font} ${currentTheme.textMain}`}>
       
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative">
-        
-        {/* Top Bar */}
-        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20">
-             {/* Score & Reset */}
-            <div className="flex flex-col items-start">
-                <div className={`text-2xl font-black tracking-tight ${currentTheme.textAccent} drop-shadow-md`}>
-                    Rp {gameState.money.toLocaleString('id-ID')}
-                </div>
-                {gameState.status === 'playing' && (
-                    <button 
-                        onClick={() => {
-                            if (window.confirm("Are you sure you want to restart this game? Progress will be lost.")) {
-                                handleRestartCurrentGame();
-                            }
-                        }}
-                        className={`mt-2 text-[10px] font-bold uppercase tracking-widest opacity-60 hover:opacity-100 transition-all ${currentTheme.textMain} flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 hover:bg-white/10`}
-                    >
-                        <IconRefresh className="w-3 h-3" />
-                        <span>Reset</span>
-                    </button>
-                )}
-            </div>
+      {gameState.status === 'menu' ? (
+          <StartScreen 
+            onStartGame={startGame} 
+            currentTheme={currentTheme}
+            onThemeChange={setCurrentTheme}
+          />
+      ) : (
+          <>
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative">
+              
+              {/* Top Bar */}
+              <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-20">
+                  {/* Score & Reset */}
+                  <div className="flex flex-col items-start">
+                      <div className={`text-2xl font-black tracking-tight ${currentTheme.textAccent} drop-shadow-md`}>
+                          Rp {gameState.money.toLocaleString('id-ID')}
+                      </div>
+                      {gameState.status === 'playing' && (
+                          <button 
+                              onClick={() => {
+                                  if (window.confirm("Are you sure you want to restart this game? Progress will be lost.")) {
+                                      handleRestartCurrentGame();
+                                  }
+                              }}
+                              className={`mt-2 text-[10px] font-bold uppercase tracking-widest opacity-60 hover:opacity-100 transition-all ${currentTheme.textMain} flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 hover:bg-white/10`}
+                          >
+                              <IconRefresh className="w-3 h-3" />
+                              <span>Reset</span>
+                          </button>
+                      )}
+                  </div>
 
-            {/* Timer */}
-            {gameState.status === 'playing' && !gameState.isAnswerRevealed && (
-                <div className="flex flex-col items-center">
-                    <div className={`
-                        w-16 h-16 rounded-full border-[3px] flex items-center justify-center shadow-lg backdrop-blur-md transition-all duration-500
-                        ${timeLeft <= 10 ? 'border-red-500 bg-red-900/40 scale-110 shadow-red-500/30' : `border-white/10 bg-black/20`}
-                    `}>
-                        <span className={`text-3xl font-bold font-mono tabular-nums ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : currentTheme.textMain}`}>
-                            {timeLeft}
-                        </span>
-                    </div>
-                </div>
-            )}
-        </div>
+                  {/* Timer */}
+                  {gameState.status === 'playing' && !gameState.isAnswerRevealed && (
+                      <div className="flex flex-col items-center">
+                          <div className={`
+                              w-16 h-16 rounded-full border-[3px] flex items-center justify-center shadow-lg backdrop-blur-md transition-all duration-500
+                              ${timeLeft <= 10 ? 'border-red-500 bg-red-900/40 scale-110 shadow-red-500/30' : `border-white/10 bg-black/20`}
+                          `}>
+                              <span className={`text-3xl font-bold font-mono tabular-nums ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : currentTheme.textMain}`}>
+                                  {timeLeft}
+                              </span>
+                          </div>
+                      </div>
+                  )}
+              </div>
 
-        <div className="mb-8 scale-110 mt-12">
-            <Lifelines 
-                lifelines={gameState.lifelines} 
-                onUseLifeline={handleUseLifeline} 
-                disabled={gameState.isAnswerRevealed || gameState.status !== 'playing'}
-                theme={currentTheme}
-            />
-        </div>
-        
-        {/* Question Container */}
-        <div className="w-full max-w-5xl mb-8 z-10">
-            <div className={`relative py-10 px-12 text-center transition-all duration-500 ${currentTheme.questionBox}`}>
-                <h2 
-                  dir={isQArabic ? 'rtl' : 'ltr'}
-                  className={`
-                  ${isQArabic ? 'font-amiri text-4xl md:text-5xl leading-loose py-2' : 'text-2xl md:text-4xl leading-tight'} 
-                  font-bold drop-shadow-sm inline-block w-full
-                `}>
-                    {questionText}
-                </h2>
-            </div>
-        </div>
+              <div className="mb-8 scale-110 mt-12">
+                  <Lifelines 
+                      lifelines={gameState.lifelines} 
+                      onUseLifeline={handleUseLifeline} 
+                      disabled={gameState.isAnswerRevealed || gameState.status !== 'playing'}
+                      theme={currentTheme}
+                  />
+              </div>
+              
+              {/* Question Container & Options */}
+              {currentQuestion && (
+                  <QuestionDisplay 
+                      question={currentQuestion} 
+                      theme={currentTheme}
+                      selectedAnswerIndex={gameState.selectedAnswerIndex}
+                      isAnswerRevealed={gameState.isAnswerRevealed}
+                      wrongAnswersEliminated={gameState.wrongAnswersEliminated}
+                      onAnswerSelect={handleAnswerSelect}
+                  />
+              )}
 
-        {/* Options Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-5xl z-10">
-            {currentQuestion?.options.map((option, idx) => {
-                const letter = String.fromCharCode(65 + idx);
-                const isSelected = gameState.selectedAnswerIndex === idx;
-                const isCorrect = currentQuestion.correctAnswerIndex === idx;
-                const isRevealed = gameState.isAnswerRevealed;
-                const isEliminated = gameState.wrongAnswersEliminated.includes(idx);
-                const isOptArabic = isArabic(option);
+              {/* Game Controls */}
+              <div className="mt-12 h-20 flex items-center justify-center z-10">
+                  {gameState.status === 'playing' && !gameState.isAnswerRevealed && gameState.selectedAnswerIndex !== null && (
+                      <button 
+                          onClick={handleLockAnswer}
+                          className={`px-16 py-4 text-xl font-bold rounded-full hover:scale-105 active:scale-95 transition-all shadow-2xl uppercase tracking-wider ${currentTheme.btnPrimary}`}
+                      >
+                          Lock Answer
+                      </button>
+                  )}
 
-                if (isEliminated) {
-                    return <div key={idx} className="opacity-0 pointer-events-none"></div>;
-                }
-
-                let optionClass = currentTheme.optionBase;
-                if (isRevealed) {
-                    if (isCorrect) optionClass = currentTheme.optionCorrect;
-                    else if (isSelected) optionClass = currentTheme.optionWrong;
-                } else if (isSelected) {
-                    optionClass = currentTheme.optionSelected;
-                } else {
-                    optionClass += ` ${currentTheme.optionHover} cursor-pointer`;
-                }
-
-                return (
-                    <div 
-                        key={idx}
-                        onClick={() => handleAnswerSelect(idx)}
-                        className={`
-                            relative py-5 px-8 rounded-xl shadow-md transition-all duration-200
-                            flex items-center group
-                            ${optionClass}
-                            ${!isRevealed && !isSelected ? 'active:scale-[0.98]' : ''}
-                        `}
-                    >
-                        <span className={`mr-6 text-2xl font-black opacity-70 ${currentTheme.textAccent} ${isSelected && !isRevealed ? 'text-inherit' : ''}`}>{letter}</span>
-                        <span 
-                          dir={isOptArabic ? 'rtl' : 'ltr'}
-                          className={`
-                          ${isOptArabic ? 'font-amiri text-2xl md:text-3xl leading-relaxed' : 'text-xl md:text-2xl text-left'}
-                           flex-1 ${isOptArabic ? 'text-right' : ''} font-medium
-                        `}>{option}</span>
-                    </div>
-                );
-            })}
-        </div>
-
-        {/* Game Controls */}
-        <div className="mt-12 h-20 flex items-center justify-center z-10">
-            {gameState.status === 'playing' && !gameState.isAnswerRevealed && gameState.selectedAnswerIndex !== null && (
-                <button 
-                    onClick={handleLockAnswer}
-                    className={`px-16 py-4 text-xl font-bold rounded-full hover:scale-105 active:scale-95 transition-all shadow-2xl uppercase tracking-wider ${currentTheme.btnPrimary}`}
-                >
-                    Lock Answer
-                </button>
-            )}
-
-            {gameState.isAnswerRevealed && gameState.status === 'playing' && (
-                gameState.selectedAnswerIndex === currentQuestion.correctAnswerIndex ? (
-                    <div className="flex flex-col items-center gap-3 animate-bounce">
-                        <div className="text-emerald-400 text-lg font-medium px-4 py-1 bg-black/40 rounded-full backdrop-blur-sm">
-                            {currentQuestion.explanation || "Correct Answer!"}
+                  {gameState.isAnswerRevealed && gameState.status === 'playing' && (
+                      gameState.selectedAnswerIndex === currentQuestion.correctAnswerIndex ? (
+                          <div className="flex flex-col items-center gap-3 animate-bounce">
+                              <div className="text-emerald-400 text-lg font-medium px-4 py-1 bg-black/40 rounded-full backdrop-blur-sm">
+                                  {currentQuestion.explanation || "Correct Answer!"}
+                              </div>
+                              <button 
+                                  onClick={handleNextQuestion}
+                                  className="px-12 py-4 bg-emerald-500 hover:bg-emerald-400 text-white text-xl font-bold rounded-full shadow-lg shadow-emerald-500/30 hover:scale-105 transition-all uppercase tracking-wide"
+                              >
+                                  Next Question ➜
+                              </button>
+                          </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-rose-500 text-4xl font-black animate-pulse drop-shadow-lg">
+                            <IconXCircle className="w-12 h-12" />
+                            GAME OVER
                         </div>
-                        <button 
-                            onClick={handleNextQuestion}
-                            className="px-12 py-4 bg-emerald-500 hover:bg-emerald-400 text-white text-xl font-bold rounded-full shadow-lg shadow-emerald-500/30 hover:scale-105 transition-all uppercase tracking-wide"
-                        >
-                            Next Question ➜
-                        </button>
-                    </div>
-                ) : (
-                   <div className="flex items-center gap-2 text-rose-500 text-4xl font-black animate-pulse drop-shadow-lg">
-                       <IconXCircle className="w-12 h-12" />
-                       GAME OVER
-                   </div>
-                )
-            )}
-        </div>
-      </div>
+                      )
+                  )}
+              </div>
+            </div>
 
-      {/* Sidebar */}
-      <div className="hidden lg:flex w-80 bg-black/20 backdrop-blur-md border-l border-white/5 p-6 items-center justify-center z-10">
-        <MoneyLadder currentQuestionIndex={gameState.currentQuestionIndex} theme={currentTheme} />
-      </div>
+            {/* Sidebar */}
+            <div className="hidden lg:flex w-80 bg-black/20 backdrop-blur-md border-l border-white/5 p-6 items-center justify-center z-10">
+              <MoneyLadder currentQuestionIndex={gameState.currentQuestionIndex} theme={currentTheme} />
+            </div>
+          </>
+      )}
 
       {/* Overlays */}
       {(gameState.status === 'gameover' || gameState.status === 'victory') && (

@@ -1,5 +1,5 @@
 
-type SoundType = 'correct' | 'wrong' | 'lifeline' | 'lock' | 'start' | 'wait';
+type SoundType = 'correct' | 'wrong' | 'lifeline' | 'lock' | 'start' | 'wait' | 'cheer';
 
 // Using reliable CDN links for sound effects
 const SOUND_URLS: Record<SoundType, string> = {
@@ -8,14 +8,19 @@ const SOUND_URLS: Record<SoundType, string> = {
   lifeline: 'https://assets.mixkit.co/sfx/preview/mixkit-sci-fi-click-900.mp3',
   lock: 'https://assets.mixkit.co/sfx/preview/mixkit-modern-technology-select-3124.mp3',
   start: 'https://assets.mixkit.co/sfx/preview/mixkit-video-game-treasure-2066.mp3',
-  wait: 'https://assets.mixkit.co/sfx/preview/mixkit-clock-ticking-ticker-1065.mp3'
+  wait: 'https://assets.mixkit.co/sfx/preview/mixkit-clock-ticking-ticker-1065.mp3',
+  cheer: 'https://assets.mixkit.co/sfx/preview/mixkit-small-crowd-cheer-2064.mp3'
 };
 
 export const playSound = (type: SoundType) => {
   try {
     const audio = new Audio(SOUND_URLS[type]);
     // Keep volume subtle as requested
-    audio.volume = type === 'correct' || type === 'start' ? 0.4 : 0.3;
+    if (type === 'cheer') {
+        audio.volume = 0.25; // Slightly lower for background cheer
+    } else {
+        audio.volume = type === 'correct' || type === 'start' ? 0.4 : 0.3;
+    }
     
     if (type === 'lock') {
         audio.volume = 0.5; // Slightly louder for the immediate feedback

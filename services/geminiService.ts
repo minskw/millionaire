@@ -3,14 +3,16 @@ import { Question } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const generateQuestions = async (topic: string, count: number = 15): Promise<Question[]> => {
+export const generateQuestions = async (topic: string, subTopic: string = '', count: number = 15): Promise<Question[]> => {
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Generate ${count} multiple-choice questions about "${topic}" for a "Who Wants to Be a Millionaire" game. 
+    const prompt = `Generate ${count} multiple-choice questions about "${topic}"${subTopic ? ` specifically focusing on "${subTopic}"` : ''} for a "Who Wants to Be a Millionaire" game. 
       The questions must range from very easy (for the first 5), medium (next 5), to very hard (last 5).
       Provide 4 options for each question. Ensure the correct answer is accurate.
-      Language: Indonesian (Bahasa Indonesia).`,
+      Language: Indonesian (Bahasa Indonesia).`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
