@@ -6,10 +6,9 @@ import { AudienceInteraction } from './components/AudienceInteraction';
 import { StudentSpotlight } from './components/StudentSpotlight';
 import { QuestionDisplay } from './components/QuestionDisplay';
 import { Question, GameState, MONEY_LADDER, SAFETY_NETS } from './types';
-import { generateQuestions } from './services/geminiService';
 import { playSound } from './services/soundService';
 import { THEMES, ThemeConfig } from './themes';
-import { IconRefresh, IconCheckCircle, IconXCircle } from './components/Icons';
+import { IconRefresh, IconCheckCircle, IconXCircle, IconArrowRight } from './components/Icons';
 
 type OverlayState = 
   | { type: 'none' }
@@ -31,26 +30,57 @@ const App: React.FC = () => {
 
   const [overlay, setOverlay] = useState<OverlayState>({ type: 'none' });
   const [lastTopic, setLastTopic] = useState<string | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(THEMES.classic);
   const [timeLeft, setTimeLeft] = useState(60);
+  
+  // Stores remaining questions for future rounds
+  const [queuedQuestions, setQueuedQuestions] = useState<Question[]>([]);
 
   const startGame = (questions: Question[], topic: string | undefined, theme: ThemeConfig) => {
     playSound('start');
     setLastTopic(topic || null);
     setCurrentTheme(theme);
+
+    // Split questions into current round (max 15) and queue
+    const ROUND_LIMIT = 15;
+    const currentRoundQs = questions.slice(0, ROUND_LIMIT);
+    const remainingQs = questions.slice(ROUND_LIMIT);
+    setQueuedQuestions(remainingQs);
+
     setGameState({
       currentQuestionIndex: 0,
       money: 0,
       lifelines: { fiftyFifty: true, phoneFriend: true, askAudience: true },
       status: 'playing',
-      questions: questions,
+      questions: currentRoundQs,
       selectedAnswerIndex: null,
       isAnswerRevealed: false,
       wrongAnswersEliminated: [],
     });
     setTimeLeft(60);
     setOverlay({ type: 'none' });
+  };
+
+  const handleNextRound = () => {
+      const ROUND_LIMIT = 15;
+      const nextRoundQs = queuedQuestions.slice(0, ROUND_LIMIT);
+      const remainingQs = queuedQuestions.slice(ROUND_LIMIT);
+      
+      setQueuedQuestions(remainingQs);
+      
+      playSound('start');
+      setGameState({
+          currentQuestionIndex: 0,
+          money: 0,
+          lifelines: { fiftyFifty: true, phoneFriend: true, askAudience: true },
+          status: 'playing',
+          questions: nextRoundQs,
+          selectedAnswerIndex: null,
+          isAnswerRevealed: false,
+          wrongAnswersEliminated: [],
+      });
+      setTimeLeft(60);
+      setOverlay({ type: 'none' });
   };
 
   const handleAnswerSelect = (index: number) => {
@@ -71,7 +101,7 @@ const App: React.FC = () => {
       if (isCorrect) {
         playSound('correct');
         playSound('cheer');
-        const newMoney = MONEY_LADDER[gameState.currentQuestionIndex];
+        const newMoney = MONEY_LADDER[gameState.currentQuestionIndex] || 0;
         
         if (gameState.currentQuestionIndex === gameState.questions.length - 1) {
              setGameState(prev => ({
@@ -143,28 +173,24 @@ const App: React.FC = () => {
       setGameState(prev => ({ ...prev, status: 'menu', questions: [] }));
       setOverlay({ type: 'none' });
       setLastTopic(null);
-  };
-
-  const handlePlayAgain = async () => {
-    if (!lastTopic) {
-      handleBackToMenu();
-      return;
-    }
-
-    setIsRegenerating(true);
-    try {
-      const newQuestions = await generateQuestions(lastTopic);
-      startGame(newQuestions, lastTopic, currentTheme);
-    } catch (error) {
-      console.error("Failed to regenerate", error);
-      setOverlay({ type: 'message', title: "Error", text: "Failed to generate new questions. Please try again." });
-    } finally {
-      setIsRegenerating(false);
-    }
+      setQueuedQuestions([]); // Clear queue when returning to menu
   };
 
   const handleRestartCurrentGame = () => {
-      startGame(gameState.questions, lastTopic || undefined, currentTheme);
+      // Restarts the current round without resetting the queue of future questions
+      playSound('start');
+      setGameState(prev => ({
+        ...prev,
+        currentQuestionIndex: 0,
+        money: 0,
+        lifelines: { fiftyFifty: true, phoneFriend: true, askAudience: true },
+        status: 'playing',
+        selectedAnswerIndex: null,
+        isAnswerRevealed: false,
+        wrongAnswersEliminated: [],
+      }));
+      setTimeLeft(60);
+      setOverlay({ type: 'none' });
   };
 
   // Timer Logic
@@ -319,58 +345,47 @@ const App: React.FC = () => {
       {/* Overlays */}
       {(gameState.status === 'gameover' || gameState.status === 'victory') && (
         <div className="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center text-center p-8">
-            {isRegenerating ? (
-                <div className="flex flex-col items-center animate-pulse">
-                    <div className="mb-6 p-4 rounded-full bg-white/5">
-                        <IconRefresh className={`w-16 h-16 ${currentTheme.textAccent} animate-spin`} />
-                    </div>
-                    <h2 className={`text-3xl font-bold ${currentTheme.textAccent}`}>Crafting New Questions...</h2>
-                    <p className="text-slate-400 mt-2">Topic: {lastTopic}</p>
-                </div>
-            ) : (
-                <>
-                    <div className="mb-6">
-                        {gameState.status === 'victory' ? 
-                            <IconCheckCircle className="w-24 h-24 text-emerald-400" /> : 
-                            <IconXCircle className="w-24 h-24 text-rose-500" />
-                        }
-                    </div>
-                    <h1 className={`text-6xl md:text-8xl font-black mb-4 tracking-tight ${gameState.status === 'victory' ? 'text-emerald-400' : 'text-rose-500'}`}>
-                        {gameState.status === 'victory' ? 'MILLIONAIRE!' : 'GAME OVER'}
-                    </h1>
-                    <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 mb-12">
-                        <p className="text-xl text-slate-400 uppercase tracking-widest font-bold mb-2">Total Winnings</p>
-                        <span className={`text-6xl font-black block ${currentTheme.textAccent} drop-shadow-lg`}>
-                            Rp {gameState.money.toLocaleString('id-ID')}
-                        </span>
-                    </div>
-                    
-                    <div className="flex gap-4 flex-col sm:flex-row flex-wrap justify-center">
-                        {lastTopic && (
-                            <button 
-                                onClick={handlePlayAgain}
-                                className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 ${currentTheme.btnPrimary}`}
-                            >
-                                Play Again (New Questions)
-                            </button>
-                        )}
-                        
-                         <button 
-                            onClick={handleRestartCurrentGame}
-                            className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 ${currentTheme.btnSecondary}`}
-                        >
-                            Retry This Quiz
-                        </button>
+            <div className="mb-6">
+                {gameState.status === 'victory' ? 
+                    <IconCheckCircle className="w-24 h-24 text-emerald-400" /> : 
+                    <IconXCircle className="w-24 h-24 text-rose-500" />
+                }
+            </div>
+            <h1 className={`text-6xl md:text-8xl font-black mb-4 tracking-tight ${gameState.status === 'victory' ? 'text-emerald-400' : 'text-rose-500'}`}>
+                {gameState.status === 'victory' ? 'MILLIONAIRE!' : 'GAME OVER'}
+            </h1>
+            <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 mb-12">
+                <p className="text-xl text-slate-400 uppercase tracking-widest font-bold mb-2">Total Winnings</p>
+                <span className={`text-6xl font-black block ${currentTheme.textAccent} drop-shadow-lg`}>
+                    Rp {gameState.money.toLocaleString('id-ID')}
+                </span>
+            </div>
+            
+            <div className="flex gap-4 flex-col sm:flex-row flex-wrap justify-center">
+                 {queuedQuestions.length > 0 && (
+                     <button 
+                        onClick={handleNextRound}
+                        className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 shadow-lg shadow-blue-500/20 flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white`}
+                    >
+                        Next Round ({queuedQuestions.length} left)
+                        <IconArrowRight className="w-5 h-5" />
+                    </button>
+                 )}
 
-                        <button 
-                            onClick={handleBackToMenu}
-                            className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 ${currentTheme.btnSecondary}`}
-                        >
-                            Main Menu
-                        </button>
-                    </div>
-                </>
-            )}
+                 <button 
+                    onClick={handleRestartCurrentGame}
+                    className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 ${currentTheme.btnPrimary}`}
+                >
+                    Retry Quiz
+                </button>
+
+                <button 
+                    onClick={handleBackToMenu}
+                    className={`px-10 py-4 rounded-xl text-lg font-bold transition-all hover:-translate-y-1 ${currentTheme.btnSecondary}`}
+                >
+                    Main Menu
+                </button>
+            </div>
         </div>
       )}
 
