@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Question } from '../types';
 import { THEMES, ThemeConfig } from '../themes';
-import { IconUpload, IconDownload, IconPlus, IconTrash } from './Icons';
+import { IconUpload, IconDownload, IconPlus, IconTrash, IconSparkles, IconRefresh } from './Icons';
+import { generateQuestions } from '../services/geminiService';
 
 interface StartScreenProps {
   onStartGame: (questions: Question[], topic: string | undefined, theme: ThemeConfig) => void;
@@ -13,12 +14,23 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Manual Entry State
+  // Questions State
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
+  
+  // UI State
+  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('manual');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Manual Entry State
   const [qText, setQText] = useState('');
   const [options, setOptions] = useState(['', '', '', '']);
   const [correctIdx, setCorrectIdx] = useState(0);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+
+  // AI Entry State
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiSubTopic, setAiSubTopic] = useState('');
+  const [aiCount, setAiCount] = useState(10);
 
   // Use the passed theme prop instead of local state
   const theme = currentTheme;
@@ -34,16 +46,15 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
         const parsedQuestions = JSON.parse(content) as Question[];
         if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
            if(parsedQuestions[0].question && Array.isArray(parsedQuestions[0].options)) {
-             // Load imported questions into manual list so user can edit/add to them
-             setManualQuestions(parsedQuestions);
+             setManualQuestions(prev => [...prev, ...parsedQuestions]);
            } else {
-             setError("Invalid JSON format. Must be an array of Question objects.");
+             setError("Format JSON tidak valid. Harus berupa array objek Question.");
            }
         } else {
-          setError("JSON file is empty or not an array.");
+          setError("File JSON kosong atau bukan array.");
         }
       } catch (err) {
-        setError("Failed to parse JSON file.");
+        setError("Gagal membaca file JSON.");
       }
     };
     reader.readAsText(file);
@@ -90,10 +101,38 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
     setDifficulty('medium');
   };
 
+  const handleAiGenerate = async () => {
+      if (!aiTopic.trim()) {
+          setError("Please enter a topic.");
+          return;
+      }
+      setIsGenerating(true);
+      try {
+          const questions = await generateQuestions(aiTopic, aiSubTopic, aiCount);
+          if (questions.length > 0) {
+              setManualQuestions(prev => [...prev, ...questions]);
+              setAiTopic('');
+              setAiSubTopic('');
+          } else {
+              setError("AI returned no questions. Try a different topic.");
+          }
+      } catch (e) {
+          setError("Failed to generate questions. Check API connection.");
+      } finally {
+          setIsGenerating(false);
+      }
+  };
+
   const handleRemoveQuestion = (index: number) => {
       const newQs = [...manualQuestions];
       newQs.splice(index, 1);
       setManualQuestions(newQs);
+  };
+
+  const handleClearAll = () => {
+      if (window.confirm("Are you sure you want to delete all questions?")) {
+          setManualQuestions([]);
+      }
   };
 
   const handleOptionChange = (index: number, value: string) => {
@@ -102,239 +141,307 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
       setOptions(newOpts);
   };
 
-  const isFormValid = qText.trim() !== '' && options.every(o => o.trim() !== '');
+  const isManualFormValid = qText.trim() !== '' && options.every(o => o.trim() !== '');
 
   return (
     <div className={`flex flex-col items-center justify-center w-full h-full overflow-y-auto p-4 md:p-8`}>
       
-      <div className={`max-w-6xl w-full ${theme.panelBg} ${theme.panelBorder} p-6 md:p-8 rounded-3xl shadow-2xl text-center transition-all duration-300 my-auto min-h-[80vh] flex flex-col`}>
-        <h1 className={`text-4xl md:text-6xl font-black mb-1 uppercase tracking-tight drop-shadow-sm ${theme.textAccent}`}>
-          Classroom<br/>Millionaire
-        </h1>
-        <p className={`${theme.textMain} mb-8 text-lg font-light tracking-wide opacity-80`}>The Ultimate Classroom Experience</p>
+      <div className={`max-w-7xl w-full ${theme.panelBg} ${theme.panelBorder} p-6 md:p-8 rounded-3xl shadow-2xl text-center transition-all duration-300 my-auto min-h-[85vh] flex flex-col`}>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-white/10 pb-6">
+            <div className="text-left">
+                <h1 className={`text-4xl md:text-5xl font-black uppercase tracking-tight drop-shadow-sm ${theme.textAccent}`}>
+                Classroom Millionaire
+                </h1>
+                <p className={`${theme.textMain} text-sm font-light tracking-wide opacity-80`}>Game Show Interaktif untuk Kelas</p>
+            </div>
+            <div className="mt-4 md:mt-0 flex gap-3">
+                <div className={`px-6 py-3 rounded-2xl border ${theme.panelBorder} bg-black/20 flex items-center gap-3`}>
+                    <span className={`${theme.textMuted} text-xs font-bold uppercase`}>Total Soal</span>
+                    <span className={`text-3xl font-black ${theme.textAccent}`}>{manualQuestions.length}</span>
+                </div>
+                <button
+                    onClick={() => manualQuestions.length > 0 && onStartGame(manualQuestions, "Quiz Kelas", theme)}
+                    disabled={manualQuestions.length === 0}
+                    className={`px-8 py-3 text-xl font-bold rounded-xl transition-all transform hover:scale-105 shadow-lg ${manualQuestions.length > 0 ? theme.btnPrimary : 'opacity-50 cursor-not-allowed bg-gray-800 text-gray-500'}`}
+                >
+                    START GAME
+                </button>
+            </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left flex-1 min-h-0">
           
-          {/* Left Column: Theme & File (4 cols) */}
-          <div className="lg:col-span-4 space-y-6 flex flex-col">
+          {/* Left Column: Input Area (5 cols) */}
+          <div className="lg:col-span-5 flex flex-col gap-6 h-full">
             
-            {/* Theme Selector */}
-            <div className="flex-shrink-0">
-                <h3 className={`text-xs font-bold uppercase tracking-widest mb-3 ${theme.textMuted}`}>Visual Style</h3>
-                <div className="grid grid-cols-2 gap-3">
+            {/* Theme & Import Combined */}
+            <div className={`p-4 rounded-2xl border ${theme.panelBorder} bg-white/5`}>
+                 <div className="flex gap-2 justify-between items-center mb-4">
+                     <h3 className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Settings</h3>
+                     <div className="flex gap-2">
+                        <button onClick={() => fileInputRef.current?.click()} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
+                             <IconUpload className="w-3 h-3" /> Import
+                        </button>
+                        <button onClick={handleDownloadTemplate} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
+                             <IconDownload className="w-3 h-3" /> Template
+                        </button>
+                        <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                     </div>
+                 </div>
+                 
+                 {/* Theme Mini Selector */}
+                 <div className="grid grid-cols-4 gap-2">
                     {Object.values(THEMES).map((t) => (
                         <button
                             key={t.id}
                             onClick={() => onThemeChange(t)}
-                            className={`
-                                relative h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 group text-left
-                                ${theme.id === t.id 
-                                    ? 'border-white ring-2 ring-offset-2 ring-offset-black/50 scale-105 z-10 opacity-100 shadow-xl' 
-                                    : 'border-white/10 opacity-60 hover:opacity-100 hover:scale-105 hover:border-white/30 grayscale-[0.3] hover:grayscale-0'
-                                }
-                            `}
+                            className={`h-10 rounded-lg border transition-all ${theme.id === t.id ? 'border-white ring-1 ring-white bg-white/20' : 'border-transparent bg-black/30 hover:bg-white/10'}`}
+                            title={t.name}
                         >
-                            <div className={`absolute inset-0 ${t.appBg}`} />
-                            <div className={`absolute top-2 right-2 p-1 rounded-lg border ${t.panelBorder} ${t.panelBg} ${t.textAccent} shadow-sm`}>
-                                {t.icon}
-                            </div>
-                            <div className={`absolute bottom-0 inset-x-0 p-1.5 border-t ${t.panelBorder} ${t.panelBg} backdrop-blur-md`}>
-                                <span className={`text-[9px] font-bold uppercase tracking-wider ${t.textMain}`}>
-                                    {t.name}
-                                </span>
-                            </div>
+                            <div className={`w-full h-full rounded flex items-center justify-center ${t.textAccent}`}>{t.icon}</div>
                         </button>
                     ))}
-                </div>
+                 </div>
             </div>
 
-            {/* File Import */}
-            <div className={`p-5 rounded-2xl border ${theme.panelBorder} bg-white/5 flex-shrink-0`}>
-                 <h3 className={`text-sm font-bold mb-3 flex items-center gap-2 ${theme.textMain}`}>
-                  <IconUpload className="w-4 h-4" />
-                  <span>Import / Export</span>
-                </h3>
-                <input
-                  type="file"
-                  accept=".json"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <div className="flex gap-2">
-                    <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`flex-1 px-3 py-2 text-sm font-bold rounded-lg transition-colors ${theme.btnSecondary}`}
+            {/* Input Tabs */}
+            <div className={`flex-1 flex flex-col rounded-2xl border ${theme.panelBorder} bg-white/5 overflow-hidden`}>
+                <div className="flex border-b border-white/10">
+                    <button 
+                        onClick={() => setActiveTab('manual')}
+                        className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === 'manual' ? `${theme.textAccent} bg-white/5` : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                    Import JSON
+                        Manual Input
                     </button>
-                     <button
-                    onClick={handleDownloadTemplate}
-                    title="Download Template"
-                    className={`px-3 py-2 font-bold rounded-lg transition-colors ${theme.btnSecondary}`}
+                    <button 
+                        onClick={() => setActiveTab('ai')}
+                        className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${activeTab === 'ai' ? `${theme.textAccent} bg-white/5` : 'text-gray-500 hover:text-gray-300'}`}
                     >
-                     <IconDownload className="w-4 h-4" />
+                        <IconSparkles className="w-4 h-4" />
+                        AI Generate
                     </button>
+                </div>
+
+                <div className="p-5 flex-1 overflow-y-auto">
+                    {activeTab === 'manual' ? (
+                         <div className="space-y-4">
+                            <div>
+                                <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Question</label>
+                                <textarea
+                                    dir="auto"
+                                    value={qText}
+                                    onChange={(e) => setQText(e.target.value)}
+                                    placeholder="Tulis pertanyaan di sini..."
+                                    className={`w-full px-4 py-3 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-none h-24 ${theme.inputBg}`}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Options (Select Correct)</label>
+                                {[0,1,2,3].map(i => (
+                                    <div key={i} className="flex items-center gap-2 group">
+                                        <div 
+                                            onClick={() => setCorrectIdx(i)}
+                                            className={`
+                                                w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center cursor-pointer border-2 transition-all
+                                                ${correctIdx === i 
+                                                    ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg scale-105' 
+                                                    : 'bg-black/20 border-white/10 text-white/30 hover:border-white/30'
+                                                }
+                                            `}
+                                        >
+                                            {String.fromCharCode(65+i)}
+                                        </div>
+                                        <input 
+                                            dir="auto"
+                                            type="text"
+                                            value={options[i]}
+                                            onChange={(e) => handleOptionChange(i, e.target.value)}
+                                            placeholder={`Pilihan ${String.fromCharCode(65+i)}`}
+                                            className={`flex-1 px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-1 focus:ring-opacity-50 ${theme.inputBg}`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="flex gap-2 pt-2">
+                                <div className="flex-1">
+                                    <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Difficulty</label>
+                                    <div className="flex gap-1">
+                                        {(['easy', 'medium', 'hard'] as const).map((d) => (
+                                            <button
+                                                key={d}
+                                                onClick={() => setDifficulty(d)}
+                                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded border transition-all
+                                                    ${difficulty === d 
+                                                        ? (d === 'easy' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 
+                                                        d === 'medium' ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 
+                                                        'bg-red-500/20 border-red-500 text-red-400')
+                                                        : `bg-black/20 border-transparent ${theme.textMuted} hover:bg-white/5`
+                                                    }
+                                                `}
+                                            >
+                                                {d}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleAddQuestion}
+                                disabled={!isManualFormValid}
+                                className={`w-full py-3 font-bold rounded-xl transition-all mt-2 flex items-center justify-center gap-2 ${isManualFormValid ? theme.btnSecondary : 'opacity-50 cursor-not-allowed bg-white/5 text-gray-500'}`}
+                            >
+                                <IconPlus className="w-4 h-4" />
+                                Tambahkan Soal
+                            </button>
+                         </div>
+                    ) : (
+                        <div className="space-y-4 h-full flex flex-col">
+                             <div className={`p-4 rounded-xl bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/20`}>
+                                <p className="text-xs text-blue-200/80 mb-2">
+                                    Gunakan AI untuk membuat soal secara otomatis berdasarkan topik.
+                                </p>
+                             </div>
+
+                             <div>
+                                <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Topik Utama</label>
+                                <input
+                                    type="text"
+                                    value={aiTopic}
+                                    onChange={(e) => setAiTopic(e.target.value)}
+                                    placeholder="Contoh: Sejarah Indonesia, Biologi Sel..."
+                                    className={`w-full px-4 py-3 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 ${theme.inputBg}`}
+                                />
+                             </div>
+                             
+                             <div>
+                                <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Sub-Topik (Opsional)</label>
+                                <input
+                                    type="text"
+                                    value={aiSubTopic}
+                                    onChange={(e) => setAiSubTopic(e.target.value)}
+                                    placeholder="Contoh: Perang Diponegoro..."
+                                    className={`w-full px-4 py-3 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 ${theme.inputBg}`}
+                                />
+                             </div>
+
+                             <div>
+                                <label className={`text-xs font-bold uppercase ${theme.textMuted} mb-1 block`}>Jumlah Soal: {aiCount}</label>
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="20"
+                                    step="1"
+                                    value={aiCount}
+                                    onChange={(e) => setAiCount(parseInt(e.target.value))}
+                                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                />
+                             </div>
+
+                             <div className="flex-1"></div>
+
+                             <button
+                                onClick={handleAiGenerate}
+                                disabled={isGenerating || !aiTopic.trim()}
+                                className={`w-full py-4 font-bold rounded-xl transition-all mt-2 flex items-center justify-center gap-2 shadow-lg ${isGenerating ? 'bg-gray-700 cursor-wait' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white'}`}
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <IconRefresh className="w-4 h-4 animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <IconSparkles className="w-4 h-4" />
+                                        Generate Questions
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
           </div>
 
-          {/* Right Column: Manual Entry (8 cols) */}
-          <div className={`lg:col-span-8 p-6 rounded-3xl border ${theme.panelBorder} bg-white/5 flex flex-col relative overflow-hidden h-full max-h-[650px]`}>
-            
-            <div className="flex justify-between items-center mb-4">
-                <h3 className={`text-xl font-bold flex items-center gap-2 ${theme.textAccent}`}>
-                    <IconPlus className="w-6 h-6" />
-                    <span>Manual Entry</span>
+          {/* Right Column: Table (7 cols) */}
+          <div className={`lg:col-span-7 flex flex-col h-full min-h-[500px]`}>
+            <div className="flex justify-between items-center mb-3">
+                 <h3 className={`text-lg font-bold flex items-center gap-2 ${theme.textMain}`}>
+                    <span className="bg-white/10 px-2 py-1 rounded text-xs uppercase tracking-wider text-white/60">Daftar Soal</span>
+                    Current Questions
                 </h3>
-                <span className={`text-sm font-mono ${theme.textMuted}`}>
-                    Total: {manualQuestions.length}
-                </span>
+                {manualQuestions.length > 0 && (
+                    <button 
+                        onClick={handleClearAll}
+                        className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                    >
+                        <IconTrash className="w-3 h-3" /> Clear All
+                    </button>
+                )}
             </div>
 
-            {/* Questions Table Preview */}
-            <div className="flex-1 overflow-y-auto mb-4 pr-2 min-h-0 border rounded-xl border-white/10 bg-black/20">
-                {manualQuestions.length === 0 ? (
-                    <div className={`text-center opacity-40 py-12 flex flex-col items-center ${theme.textMuted}`}>
-                        <IconPlus className="w-12 h-12 mb-2 opacity-50" />
-                        <p>No questions added yet.<br/>Import JSON or add manually below.</p>
-                    </div>
-                ) : (
-                    <table className="w-full text-left text-sm border-collapse">
-                        <thead className="sticky top-0 bg-black/80 backdrop-blur-md z-10">
-                            <tr className={`border-b ${theme.panelBorder} ${theme.textMuted} text-xs uppercase tracking-wider`}>
-                                <th className="p-3 w-12 text-center">#</th>
-                                <th className="p-3">Question</th>
-                                <th className="p-3 hidden md:table-cell">Correct Answer</th>
-                                <th className="p-3 w-24">Difficulty</th>
-                                <th className="p-3 w-16 text-center">Act</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
+            <div className={`flex-1 overflow-hidden rounded-2xl border ${theme.panelBorder} bg-black/30 relative flex flex-col`}>
+                {/* Header */}
+                <div className={`flex text-xs font-bold uppercase tracking-wider p-3 border-b ${theme.panelBorder} ${theme.textMuted} bg-black/40`}>
+                    <div className="w-10 text-center">#</div>
+                    <div className="flex-1 px-2">Question</div>
+                    <div className="w-24 hidden md:block px-2">Difficulty</div>
+                    <div className="w-10 text-center">Del</div>
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {manualQuestions.length === 0 ? (
+                        <div className={`h-full flex flex-col items-center justify-center opacity-40 p-8 text-center ${theme.textMuted}`}>
+                            <div className="p-4 rounded-full bg-white/5 mb-3">
+                                <IconPlus className="w-8 h-8 opacity-50" />
+                            </div>
+                            <p>Belum ada soal.</p>
+                            <p className="text-sm mt-1">Tambahkan manual, Import JSON, atau gunakan AI Generator.</p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-white/5">
                             {manualQuestions.map((q, idx) => (
-                                <tr key={idx} className="hover:bg-white/5 transition-colors group">
-                                    <td className={`p-3 text-center font-mono opacity-50`}>{idx + 1}</td>
-                                    <td className={`p-3 max-w-[200px] md:max-w-xs`}>
-                                        <div className={`truncate font-medium ${theme.textMain}`} title={q.question}>
+                                <div key={idx} className="flex items-center p-3 hover:bg-white/5 transition-colors group text-sm">
+                                    <div className={`w-10 text-center font-mono opacity-50 ${theme.textMain}`}>{idx + 1}</div>
+                                    <div className="flex-1 px-2 min-w-0">
+                                        <div className={`truncate font-medium ${theme.textMain} mb-0.5`} title={q.question}>
                                             {q.question}
                                         </div>
-                                        {/* Show answer on mobile only */}
-                                        <div className="md:hidden text-xs opacity-60 mt-1 truncate">
-                                            <span className="text-emerald-400 font-bold">{String.fromCharCode(65 + q.correctAnswerIndex)}:</span> {q.options[q.correctAnswerIndex]}
+                                        <div className="text-xs opacity-60 truncate flex items-center gap-2">
+                                            <span className="text-emerald-400 font-bold">{String.fromCharCode(65 + q.correctAnswerIndex)}:</span> 
+                                            <span className={theme.textMuted}>{q.options[q.correctAnswerIndex]}</span>
                                         </div>
-                                    </td>
-                                    <td className="p-3 hidden md:table-cell max-w-[150px]">
-                                        <div className="truncate opacity-80" title={q.options[q.correctAnswerIndex]}>
-                                            <span className={`font-bold mr-1 ${theme.textAccent}`}>{String.fromCharCode(65 + q.correctAnswerIndex)}.</span>
-                                            {q.options[q.correctAnswerIndex]}
-                                        </div>
-                                    </td>
-                                    <td className="p-3">
+                                    </div>
+                                    <div className="w-24 hidden md:flex px-2 items-center">
                                          {q.difficulty && (
-                                            <span className={`text-[10px] px-2 py-1 rounded border uppercase font-bold tracking-wider block w-fit
-                                                ${q.difficulty === 'easy' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' :
-                                                  q.difficulty === 'medium' ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' :
-                                                  'border-red-500/30 text-red-400 bg-red-500/10'}
+                                            <span className={`text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider
+                                                ${q.difficulty === 'easy' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5' :
+                                                  q.difficulty === 'medium' ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/5' :
+                                                  'border-red-500/30 text-red-400 bg-red-500/5'}
                                             `}>
                                                 {q.difficulty}
                                             </span>
                                         )}
-                                    </td>
-                                    <td className="p-3 text-center">
+                                    </div>
+                                    <div className="w-10 text-center">
                                         <button 
                                             onClick={() => handleRemoveQuestion(idx)} 
-                                            className="text-red-500/40 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-all"
-                                            title="Remove Question"
+                                            className="text-red-500/30 hover:text-red-400 p-1.5 rounded hover:bg-red-500/10 transition-all"
+                                            title="Hapus Soal"
                                         >
                                             <IconTrash className="w-4 h-4" />
                                         </button>
-                                    </td>
-                                </tr>
+                                    </div>
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            
-            {/* Input Form */}
-            <div className={`flex-shrink-0 space-y-3 p-4 rounded-xl bg-black/10 border ${theme.panelBorder}`}>
-                <div className="relative">
-                     <textarea
-                        dir="auto"
-                        value={qText}
-                        onChange={(e) => setQText(e.target.value)}
-                        placeholder="Enter question text here..."
-                        className={`w-full px-4 py-3 text-md rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-none h-20 ${theme.inputBg}`}
-                     />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[0,1,2,3].map(i => (
-                        <div key={i} className="flex items-center gap-2 group">
-                            <div 
-                                onClick={() => setCorrectIdx(i)}
-                                className={`
-                                    w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-2 transition-all
-                                    ${correctIdx === i 
-                                        ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg scale-110' 
-                                        : 'bg-black/20 border-white/10 text-white/30 hover:border-white/30'
-                                    }
-                                `}
-                                title="Mark as Correct Answer"
-                            >
-                                {String.fromCharCode(65+i)}
-                            </div>
-                            <input 
-                                dir="auto"
-                                type="text"
-                                value={options[i]}
-                                onChange={(e) => handleOptionChange(i, e.target.value)}
-                                placeholder={`Option ${String.fromCharCode(65+i)}`}
-                                className={`flex-1 px-3 py-2 text-sm rounded-lg focus:outline-none focus:ring-1 focus:ring-opacity-50 ${theme.inputBg}`}
-                            />
                         </div>
-                    ))}
+                    )}
                 </div>
-                
-                {/* Difficulty Selector */}
-                <div className="flex gap-2 pt-1">
-                    {(['easy', 'medium', 'hard'] as const).map((d) => (
-                        <button
-                            key={d}
-                            onClick={() => setDifficulty(d)}
-                            className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all
-                                ${difficulty === d 
-                                    ? (d === 'easy' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 
-                                       d === 'medium' ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 
-                                       'bg-red-500/20 border-red-500 text-red-400')
-                                    : `bg-black/20 border-transparent ${theme.textMuted} hover:bg-white/5`
-                                }
-                            `}
-                        >
-                            {d}
-                        </button>
-                    ))}
-                </div>
-
-                <button
-                    onClick={handleAddQuestion}
-                    disabled={!isFormValid}
-                    className={`w-full py-3 font-bold rounded-xl transition-all transform active:scale-95 flex items-center justify-center gap-2 ${isFormValid ? theme.btnSecondary : 'opacity-50 cursor-not-allowed bg-white/5 text-gray-500'}`}
-                >
-                    <IconPlus className="w-4 h-4" />
-                    Add to Quiz
-                </button>
             </div>
-
-            <button
-                onClick={() => manualQuestions.length > 0 && onStartGame(manualQuestions, "Custom Quiz", theme)}
-                disabled={manualQuestions.length === 0}
-                className={`w-full mt-4 py-4 text-lg font-bold rounded-xl transition-all transform hover:scale-[1.01] active:scale-95 shadow-lg ${manualQuestions.length > 0 ? theme.btnPrimary : 'opacity-50 cursor-not-allowed bg-gray-800 text-gray-500'}`}
-            >
-                START GAME ({manualQuestions.length})
-            </button>
-
           </div>
 
         </div>
