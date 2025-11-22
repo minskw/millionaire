@@ -35,7 +35,7 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
         setDisplayQuestion(question);
         // Fade in
         setIsVisible(true);
-      }, 300); // Matches duration-300
+      }, 500); // Increased to match duration
 
       return () => clearTimeout(timer);
     }
@@ -75,8 +75,8 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
           dir={isQArabic ? 'rtl' : 'ltr'}
           className={`
             font-bold drop-shadow-sm w-full break-words
-            transition-all duration-300 ease-in-out transform
-            ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
+            transition-all duration-500 ease-out transform
+            ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 blur-sm'}
             ${fontFamily} 
             ${textSizeClass} 
             ${lineHeight}
@@ -89,7 +89,7 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
       {/* Options Grid */}
       <div className={`
           grid grid-cols-1 md:grid-cols-2 gap-5 w-full
-          transition-all duration-300 ease-in-out transform
+          transition-all duration-500 ease-in-out transform
           ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
       `}>
           {displayQuestion.options.map((option, idx) => {

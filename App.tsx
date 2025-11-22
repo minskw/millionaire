@@ -16,6 +16,39 @@ type OverlayState =
   | { type: 'audience' }
   | { type: 'friend' };
 
+// Helper function to shuffle array (Fisher-Yates)
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArr = [...array];
+  for (let i = newArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+  }
+  return newArr;
+};
+
+// Helper to randomize questions AND their options
+const randomizeQuestions = (questions: Question[]): Question[] => {
+  // 1. Shuffle the order of questions
+  const shuffledQs = shuffleArray(questions);
+
+  // 2. Shuffle options for each question and update correctAnswerIndex
+  return shuffledQs.map(q => {
+    const optionsWithIndices = q.options.map((opt, idx) => ({
+        opt,
+        originalIndex: idx,
+        isCorrect: idx === q.correctAnswerIndex
+    }));
+
+    const shuffledOptions = shuffleArray(optionsWithIndices);
+
+    return {
+        ...q,
+        options: shuffledOptions.map(o => o.opt),
+        correctAnswerIndex: shuffledOptions.findIndex(o => o.isCorrect)
+    };
+  });
+};
+
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     currentQuestionIndex: 0,
@@ -41,10 +74,13 @@ const App: React.FC = () => {
     setLastTopic(topic || null);
     setCurrentTheme(theme);
 
+    // Randomize ALL questions (order and options) before starting
+    const randomizedQuestions = randomizeQuestions(questions);
+
     // Split questions into current round (max 15) and queue
     const ROUND_LIMIT = 15;
-    const currentRoundQs = questions.slice(0, ROUND_LIMIT);
-    const remainingQs = questions.slice(ROUND_LIMIT);
+    const currentRoundQs = randomizedQuestions.slice(0, ROUND_LIMIT);
+    const remainingQs = randomizedQuestions.slice(ROUND_LIMIT);
     setQueuedQuestions(remainingQs);
 
     setGameState({
@@ -177,11 +213,17 @@ const App: React.FC = () => {
   };
 
   const handleRestartCurrentGame = () => {
-      // Restarts the current round without resetting the queue of future questions
+      // Restarts the current round AND reshuffles the current questions
       playSound('start');
+      
+      // Re-randomize the current set of questions (options and order)
+      // We clone the questions array first to avoid mutating state directly before setGameState
+      const reShuffledQuestions = randomizeQuestions([...gameState.questions]);
+
       setGameState(prev => ({
         ...prev,
         currentQuestionIndex: 0,
+        questions: reShuffledQuestions, // Use the new shuffled version
         money: 0,
         lifelines: { fiftyFifty: true, phoneFriend: true, askAudience: true },
         status: 'playing',

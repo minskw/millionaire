@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeConfig } from '../themes';
 import { IconUsers } from './Icons';
 
@@ -10,6 +10,17 @@ interface AudienceInteractionProps {
 export const AudienceInteraction: React.FC<AudienceInteractionProps> = ({ onClose, theme }) => {
   const [votes, setVotes] = useState([0, 0, 0, 0]);
   const [showResults, setShowResults] = useState(false);
+  const [animateBars, setAnimateBars] = useState(false);
+
+  useEffect(() => {
+    if (showResults) {
+      // Small delay to trigger the CSS transition after render
+      const timer = setTimeout(() => {
+        setAnimateBars(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showResults]);
 
   const handleVoteChange = (index: number, value: number) => {
     const newVotes = [...votes];
@@ -64,10 +75,14 @@ export const AudienceInteraction: React.FC<AudienceInteractionProps> = ({ onClos
             <div className="h-64 flex items-end justify-around gap-4 px-4 pb-4 border-b border-white/10">
             {votes.map((count, idx) => {
                 const percentage = Math.round((count / totalVotes) * 100);
-                const height = `${Math.max(percentage, 5)}%`; 
+                // Start at 0 height, animate to actual percentage
+                const height = animateBars ? `${Math.max(percentage, 1)}%` : '0%'; 
+                
                 return (
                 <div key={idx} className="flex flex-col items-center justify-end h-full w-1/5 group relative">
-                    <span className={`font-bold mb-2 text-xl animate-bounce ${theme.textAccent}`}>{percentage}%</span>
+                    <span className={`font-bold mb-2 text-xl transition-all duration-1000 delay-300 ${animateBars ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} ${theme.textAccent}`}>
+                        {percentage}%
+                    </span>
                     <div 
                         style={{ height }} 
                         className={`w-full rounded-t-lg transition-all duration-1000 ease-out opacity-80 ${theme.ladderItemCurrent}`}
