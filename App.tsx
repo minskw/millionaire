@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StartScreen } from './components/StartScreen';
 import { MoneyLadder } from './components/MoneyLadder';
 import { Lifelines } from './components/Lifelines';
@@ -48,6 +48,45 @@ const prepareGameQuestions = (questions: Question[], shuffleOrder: boolean): Que
         correctAnswerIndex: shuffledOptions.findIndex(o => o.isCorrect)
     };
   });
+};
+
+const AnimatedCount: React.FC<{ value: number }> = ({ value }) => {
+  const [display, setDisplay] = useState(value);
+  const startVal = useRef(value);
+  const startTime = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (value === startVal.current && startTime.current === null) return;
+    
+    // Start animation from the current displayed value
+    startVal.current = display;
+    startTime.current = null;
+    
+    let animationFrame: number;
+    const duration = 1500; // 1.5 seconds for a smooth climb
+
+    const animate = (timestamp: number) => {
+      if (!startTime.current) startTime.current = timestamp;
+      const runtime = timestamp - startTime.current;
+      
+      if (runtime < duration) {
+        const relativeProgress = runtime / duration;
+        // Ease Out Expo
+        const ease = relativeProgress === 1 ? 1 : 1 - Math.pow(2, -10 * relativeProgress);
+        
+        const nextVal = startVal.current + (value - startVal.current) * ease;
+        setDisplay(nextVal);
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        setDisplay(value);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [value]); // Re-run animation only when target value changes
+
+  return <>{Math.round(display).toLocaleString('id-ID')}</>;
 };
 
 const App: React.FC = () => {
@@ -295,7 +334,7 @@ const App: React.FC = () => {
                   {/* Score & Reset */}
                   <div className="flex flex-col items-start">
                       <div className={`text-2xl font-black tracking-tight ${currentTheme.textAccent} drop-shadow-md`}>
-                          Rp {gameState.money.toLocaleString('id-ID')}
+                          Rp <AnimatedCount value={gameState.money} />
                       </div>
                       {gameState.status === 'playing' && (
                           <button 
