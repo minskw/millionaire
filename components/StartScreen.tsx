@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Question } from '../types';
 import { THEMES, ThemeConfig } from '../themes';
-import { IconUpload, IconDownload, IconPlus, IconTrash, IconSparkles, IconRefresh, IconGrip } from './Icons';
+import { IconUpload, IconDownload, IconPlus, IconTrash, IconSparkles, IconRefresh, IconGrip, IconLink, IconClipboard, IconXCircle } from './Icons';
 import { generateQuestions } from '../services/geminiService';
 
 interface StartScreenProps {
@@ -19,6 +19,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   
+  // URL Import State
+  const [importUrl, setImportUrl] = useState('');
+  const [isUrlLoading, setIsUrlLoading] = useState(false);
+
+  // Paste Import State
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  const [pasteContent, setPasteContent] = useState('');
+
   // UI State
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('manual');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -60,6 +68,52 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleUrlImport = async () => {
+    if (!importUrl.trim()) return;
+    setIsUrlLoading(true);
+    try {
+      const res = await fetch(importUrl);
+      if (!res.ok) throw new Error("Network response was not ok");
+      const data = await res.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+         if(data[0].question && Array.isArray(data[0].options)) {
+           setManualQuestions(prev => [...prev, ...data]);
+           setImportUrl('');
+         } else {
+           setError("Format JSON invalid. Must be array of Question objects.");
+         }
+      } else {
+         setError("URL returned empty or invalid data.");
+      }
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load from URL. Check CORS or validity.");
+    } finally {
+      setIsUrlLoading(false);
+    }
+  };
+
+  const handlePasteImport = () => {
+    if (!pasteContent.trim()) return;
+    try {
+      const parsedQuestions = JSON.parse(pasteContent) as Question[];
+      if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
+         if(parsedQuestions[0].question && Array.isArray(parsedQuestions[0].options)) {
+           setManualQuestions(prev => [...prev, ...parsedQuestions]);
+           setPasteContent('');
+           setIsPasteModalOpen(false);
+         } else {
+           setError("Format JSON tidak valid. Harus berupa array objek Question.");
+         }
+      } else {
+        setError("JSON kosong atau bukan array.");
+      }
+    } catch (err) {
+      setError("Gagal parsing JSON. Pastikan format benar.");
+    }
   };
 
   const handleDownloadTemplate = () => {
@@ -187,20 +241,30 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
       
       <div className={`max-w-7xl w-full ${theme.panelBg} ${theme.panelBorder} p-6 md:p-8 rounded-3xl shadow-2xl text-center transition-all duration-300 my-auto min-h-[85vh] flex flex-col`}>
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-white/10 pb-6">
-            <div className="text-left">
-                <h1 className={`text-4xl md:text-5xl font-black uppercase tracking-tight drop-shadow-sm ${theme.textAccent}`}>
-                Classroom Millionaire
-                </h1>
-                <p className={`${theme.textMain} text-sm font-light tracking-wide opacity-80`}>Game Show Interaktif untuk Kelas</p>
+            <div className="flex items-center gap-4 md:gap-6 text-left">
+                <img 
+                    src="https://i.imgur.com/5ZX7tdB.png" 
+                    alt="Classroom Millionaire Logo" 
+                    className="w-20 h-20 md:w-28 md:h-28 object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform duration-300"
+                />
+                <div>
+                    <h1 className={`text-3xl md:text-5xl font-black uppercase tracking-tight drop-shadow-sm ${theme.textAccent}`}>
+                    Classroom Millionaire
+                    </h1>
+                    <p className={`${theme.textMain} text-sm font-light tracking-wide opacity-80`}>Game Show Interaktif untuk Kelas</p>
+                </div>
             </div>
-            <div className="mt-4 md:mt-0 flex flex-wrap justify-center gap-3 items-center">
+            <div className="mt-6 md:mt-0 flex flex-wrap justify-center gap-3 items-center">
                 <div className={`px-6 py-3 rounded-2xl border ${theme.panelBorder} bg-black/20 flex items-center gap-3`}>
-                    <span className={`${theme.textMuted} text-xs font-bold uppercase`}>Total Soal</span>
+                    <span className={`${theme.textMuted} text-xs font-bold uppercase`}>Total Questions</span>
                     <span className={`text-3xl font-black ${theme.textAccent}`}>{manualQuestions.length}</span>
                 </div>
                 
                 {/* Shuffle Toggle */}
-                <label className={`flex items-center gap-2 px-4 py-3 rounded-xl border ${theme.panelBorder} bg-white/5 cursor-pointer select-none hover:bg-white/10 transition-colors`}>
+                <label 
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border ${theme.panelBorder} bg-white/5 cursor-pointer select-none hover:bg-white/10 transition-colors`}
+                  title="If checked, questions will be randomized when the game starts"
+                >
                     <div className="relative flex items-center">
                         <input 
                             type="checkbox" 
@@ -210,7 +274,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                         />
                         <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                     </div>
-                    <span className={`${theme.textMain} text-xs font-bold uppercase`}>Acak Urutan</span>
+                    <span className={`${theme.textMain} text-xs font-bold uppercase`}>Shuffle Order</span>
                 </label>
 
                 <button
@@ -230,16 +294,42 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
             
             {/* Theme & Import Combined */}
             <div className={`p-4 rounded-2xl border ${theme.panelBorder} bg-white/5`}>
-                 <div className="flex gap-2 justify-between items-center mb-4">
-                     <h3 className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Settings</h3>
-                     <div className="flex gap-2">
-                        <button onClick={() => fileInputRef.current?.click()} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
-                             <IconUpload className="w-3 h-3" /> Import
+                 <div className="flex flex-col gap-3 mb-4">
+                     <div className="flex justify-between items-center">
+                         <h3 className={`text-xs font-bold uppercase tracking-widest ${theme.textMuted}`}>Settings</h3>
+                         <div className="flex gap-2">
+                            <button onClick={() => fileInputRef.current?.click()} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
+                                 <IconUpload className="w-3 h-3" /> File
+                            </button>
+                             <button onClick={() => setIsPasteModalOpen(true)} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
+                                 <IconClipboard className="w-3 h-3" /> Paste
+                            </button>
+                            <button onClick={handleDownloadTemplate} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
+                                 <IconDownload className="w-3 h-3" /> Tmpl
+                            </button>
+                            <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                         </div>
+                     </div>
+
+                     {/* URL Import Input */}
+                     <div className="flex gap-2 items-center">
+                        <div className="relative flex-1">
+                             <input 
+                                type="text" 
+                                value={importUrl}
+                                onChange={(e) => setImportUrl(e.target.value)}
+                                placeholder="https://.../soal.json"
+                                className={`w-full pl-7 pr-2 py-1.5 text-xs rounded-lg bg-black/20 border border-white/10 focus:outline-none focus:border-white/30 ${theme.textMain} placeholder-white/20`}
+                            />
+                            <IconLink className={`absolute left-2 top-1.5 w-3 h-3 ${theme.textMuted}`} />
+                        </div>
+                        <button 
+                            onClick={handleUrlImport}
+                            disabled={isUrlLoading || !importUrl}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 ${isUrlLoading || !importUrl ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'}`}
+                        >
+                            {isUrlLoading ? <IconRefresh className="w-3 h-3 animate-spin" /> : "Load"}
                         </button>
-                        <button onClick={handleDownloadTemplate} className={`px-2 py-1 text-xs font-bold rounded bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-1 ${theme.textMain}`}>
-                             <IconDownload className="w-3 h-3" /> Template
-                        </button>
-                        <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                      </div>
                  </div>
                  
@@ -428,24 +518,22 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                     Current Questions
                 </h3>
                 <div className="flex items-center gap-2">
-                    {manualQuestions.length > 0 && (
-                        <>
-                            <button 
-                                onClick={handleShuffleList}
-                                className={`text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-colors ${theme.textAccent} hover:bg-white/10`}
-                                title="Acak urutan daftar"
-                            >
-                                <IconRefresh className="w-3 h-3" /> Shuffle
-                            </button>
-                            <div className="w-px h-3 bg-white/20"></div>
-                            <button 
-                                onClick={handleClearAll}
-                                className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                            >
-                                <IconTrash className="w-3 h-3" /> Clear
-                            </button>
-                        </>
-                    )}
+                    <button 
+                        onClick={handleShuffleList}
+                        disabled={manualQuestions.length === 0}
+                        className={`text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-colors ${manualQuestions.length > 0 ? `${theme.textAccent} hover:bg-white/10` : 'opacity-30 cursor-not-allowed text-gray-500'}`}
+                        title="Randomize the current list of questions"
+                    >
+                        <IconRefresh className="w-3 h-3" /> Shuffle List
+                    </button>
+                    <div className="w-px h-3 bg-white/20"></div>
+                    <button 
+                        onClick={handleClearAll}
+                        disabled={manualQuestions.length === 0}
+                        className={`text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-colors ${manualQuestions.length > 0 ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10' : 'opacity-30 cursor-not-allowed text-gray-500'}`}
+                    >
+                        <IconTrash className="w-3 h-3" /> Clear
+                    </button>
                 </div>
             </div>
 
@@ -531,6 +619,41 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
             <button onClick={() => setError('')} className="ml-2 font-bold underline">Dismiss</button>
           </div>
         )}
+
+      {/* Paste Modal */}
+      {isPasteModalOpen && (
+        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className={`${theme.panelBg} ${theme.panelBorder} border p-6 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col gap-4`}>
+                <div className="flex justify-between items-center">
+                    <h3 className={`text-lg font-bold ${theme.textAccent}`}>Paste Questions JSON</h3>
+                    <button onClick={() => setIsPasteModalOpen(false)} className={`p-1 rounded hover:bg-white/10 ${theme.textMuted}`}>
+                        <IconXCircle className="w-6 h-6" />
+                    </button>
+                </div>
+                <textarea
+                    value={pasteContent}
+                    onChange={(e) => setPasteContent(e.target.value)}
+                    placeholder='[{"question": "...", "options": ["..."], "correctAnswerIndex": 0, "difficulty": "easy"}]'
+                    className={`w-full h-64 p-4 text-sm font-mono rounded-xl focus:outline-none focus:ring-2 focus:ring-opacity-50 resize-none ${theme.inputBg}`}
+                />
+                <div className="flex justify-end gap-3">
+                    <button 
+                        onClick={() => setIsPasteModalOpen(false)} 
+                        className={`px-4 py-2 rounded-lg font-bold ${theme.btnSecondary}`}
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handlePasteImport}
+                        disabled={!pasteContent.trim()}
+                        className={`px-6 py-2 rounded-lg font-bold ${theme.btnPrimary}`}
+                    >
+                        Import Questions
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
       </div>
     </div>
   );
