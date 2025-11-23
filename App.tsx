@@ -26,13 +26,14 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArr;
 };
 
-// Helper to randomize questions AND their options
-const randomizeQuestions = (questions: Question[]): Question[] => {
-  // 1. Shuffle the order of questions
-  const shuffledQs = shuffleArray(questions);
+// Helper to prepare questions (shuffle options always, shuffle order optionally)
+const prepareGameQuestions = (questions: Question[], shuffleOrder: boolean): Question[] => {
+  // 1. Shuffle the order of questions ONLY if requested
+  const orderedQs = shuffleOrder ? shuffleArray(questions) : [...questions];
 
   // 2. Shuffle options for each question and update correctAnswerIndex
-  return shuffledQs.map(q => {
+  // We always shuffle options to ensure fairness/variety even if question order is fixed
+  return orderedQs.map(q => {
     const optionsWithIndices = q.options.map((opt, idx) => ({
         opt,
         originalIndex: idx,
@@ -65,22 +66,24 @@ const App: React.FC = () => {
   const [lastTopic, setLastTopic] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(THEMES.classic);
   const [timeLeft, setTimeLeft] = useState(60);
+  const [isShuffleEnabled, setIsShuffleEnabled] = useState(true);
   
   // Stores remaining questions for future rounds
   const [queuedQuestions, setQueuedQuestions] = useState<Question[]>([]);
 
-  const startGame = (questions: Question[], topic: string | undefined, theme: ThemeConfig) => {
+  const startGame = (questions: Question[], topic: string | undefined, theme: ThemeConfig, shuffleQuestions: boolean) => {
     playSound('start');
     setLastTopic(topic || null);
     setCurrentTheme(theme);
+    setIsShuffleEnabled(shuffleQuestions);
 
-    // Randomize ALL questions (order and options) before starting
-    const randomizedQuestions = randomizeQuestions(questions);
+    // Prepare questions based on shuffle preference
+    const finalizedQuestions = prepareGameQuestions(questions, shuffleQuestions);
 
     // Split questions into current round (max 15) and queue
     const ROUND_LIMIT = 15;
-    const currentRoundQs = randomizedQuestions.slice(0, ROUND_LIMIT);
-    const remainingQs = randomizedQuestions.slice(ROUND_LIMIT);
+    const currentRoundQs = finalizedQuestions.slice(0, ROUND_LIMIT);
+    const remainingQs = finalizedQuestions.slice(ROUND_LIMIT);
     setQueuedQuestions(remainingQs);
 
     setGameState({
@@ -213,17 +216,19 @@ const App: React.FC = () => {
   };
 
   const handleRestartCurrentGame = () => {
-      // Restarts the current round AND reshuffles the current questions
+      // Restarts the current round
       playSound('start');
       
-      // Re-randomize the current set of questions (options and order)
-      // We clone the questions array first to avoid mutating state directly before setGameState
-      const reShuffledQuestions = randomizeQuestions([...gameState.questions]);
+      // Prepare questions again based on initial shuffle preference
+      // Note: We use current questions from state but re-process them to shuffle options again
+      // If shuffleOrder was enabled, this will reshuffle the question order too.
+      // If it was disabled, it preserves order but reshuffles options.
+      const freshQuestions = prepareGameQuestions([...gameState.questions], isShuffleEnabled);
 
       setGameState(prev => ({
         ...prev,
         currentQuestionIndex: 0,
-        questions: reShuffledQuestions, // Use the new shuffled version
+        questions: freshQuestions,
         money: 0,
         lifelines: { fiftyFifty: true, phoneFriend: true, askAudience: true },
         status: 'playing',

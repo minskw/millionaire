@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { Question } from '../types';
 import { THEMES, ThemeConfig } from '../themes';
-import { IconUpload, IconDownload, IconPlus, IconTrash, IconSparkles, IconRefresh } from './Icons';
+import { IconUpload, IconDownload, IconPlus, IconTrash, IconSparkles, IconRefresh, IconGrip } from './Icons';
 import { generateQuestions } from '../services/geminiService';
 
 interface StartScreenProps {
-  onStartGame: (questions: Question[], topic: string | undefined, theme: ThemeConfig) => void;
+  onStartGame: (questions: Question[], topic: string | undefined, theme: ThemeConfig, shuffleQuestions: boolean) => void;
   currentTheme: ThemeConfig;
   onThemeChange: (theme: ThemeConfig) => void;
 }
@@ -16,6 +16,8 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
   
   // Questions State
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [shuffleQuestions, setShuffleQuestions] = useState(true);
   
   // UI State
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('manual');
@@ -141,6 +143,43 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
       setOptions(newOpts);
   };
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+      setDraggedItemIndex(index);
+      e.dataTransfer.effectAllowed = "move";
+      // Optional: Set drag image if needed
+  };
+
+  const handleDragEnter = (index: number) => {
+      if (draggedItemIndex === null || draggedItemIndex === index) return;
+      
+      const newQs = [...manualQuestions];
+      const item = newQs[draggedItemIndex];
+      newQs.splice(draggedItemIndex, 1);
+      newQs.splice(index, 0, item);
+      
+      setDraggedItemIndex(index);
+      setManualQuestions(newQs);
+      
+      // If user is manually reordering, they likely want this exact order
+      if (shuffleQuestions) setShuffleQuestions(false);
+  };
+
+  const handleDragEnd = () => {
+      setDraggedItemIndex(null);
+  };
+
+  const handleShuffleList = () => {
+    const newQs = [...manualQuestions];
+    for (let i = newQs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newQs[i], newQs[j]] = [newQs[j], newQs[i]];
+    }
+    setManualQuestions(newQs);
+    // If manually shuffled, disable auto-shuffle so this order is preserved
+    setShuffleQuestions(false);
+  };
+
   const isManualFormValid = qText.trim() !== '' && options.every(o => o.trim() !== '');
 
   return (
@@ -154,13 +193,28 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                 </h1>
                 <p className={`${theme.textMain} text-sm font-light tracking-wide opacity-80`}>Game Show Interaktif untuk Kelas</p>
             </div>
-            <div className="mt-4 md:mt-0 flex gap-3">
+            <div className="mt-4 md:mt-0 flex flex-wrap justify-center gap-3 items-center">
                 <div className={`px-6 py-3 rounded-2xl border ${theme.panelBorder} bg-black/20 flex items-center gap-3`}>
                     <span className={`${theme.textMuted} text-xs font-bold uppercase`}>Total Soal</span>
                     <span className={`text-3xl font-black ${theme.textAccent}`}>{manualQuestions.length}</span>
                 </div>
+                
+                {/* Shuffle Toggle */}
+                <label className={`flex items-center gap-2 px-4 py-3 rounded-xl border ${theme.panelBorder} bg-white/5 cursor-pointer select-none hover:bg-white/10 transition-colors`}>
+                    <div className="relative flex items-center">
+                        <input 
+                            type="checkbox" 
+                            checked={shuffleQuestions} 
+                            onChange={(e) => setShuffleQuestions(e.target.checked)}
+                            className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </div>
+                    <span className={`${theme.textMain} text-xs font-bold uppercase`}>Acak Urutan</span>
+                </label>
+
                 <button
-                    onClick={() => manualQuestions.length > 0 && onStartGame(manualQuestions, "Quiz Kelas", theme)}
+                    onClick={() => manualQuestions.length > 0 && onStartGame(manualQuestions, "Quiz Kelas", theme, shuffleQuestions)}
                     disabled={manualQuestions.length === 0}
                     className={`px-8 py-3 text-xl font-bold rounded-xl transition-all transform hover:scale-105 shadow-lg ${manualQuestions.length > 0 ? theme.btnPrimary : 'opacity-50 cursor-not-allowed bg-gray-800 text-gray-500'}`}
                 >
@@ -373,19 +427,32 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                     <span className="bg-white/10 px-2 py-1 rounded text-xs uppercase tracking-wider text-white/60">Daftar Soal</span>
                     Current Questions
                 </h3>
-                {manualQuestions.length > 0 && (
-                    <button 
-                        onClick={handleClearAll}
-                        className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                    >
-                        <IconTrash className="w-3 h-3" /> Clear All
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {manualQuestions.length > 0 && (
+                        <>
+                            <button 
+                                onClick={handleShuffleList}
+                                className={`text-xs font-bold flex items-center gap-1 px-2 py-1 rounded transition-colors ${theme.textAccent} hover:bg-white/10`}
+                                title="Acak urutan daftar"
+                            >
+                                <IconRefresh className="w-3 h-3" /> Shuffle
+                            </button>
+                            <div className="w-px h-3 bg-white/20"></div>
+                            <button 
+                                onClick={handleClearAll}
+                                className="text-xs font-bold text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                            >
+                                <IconTrash className="w-3 h-3" /> Clear
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
             <div className={`flex-1 overflow-hidden rounded-2xl border ${theme.panelBorder} bg-black/30 relative flex flex-col`}>
                 {/* Header */}
                 <div className={`flex text-xs font-bold uppercase tracking-wider p-3 border-b ${theme.panelBorder} ${theme.textMuted} bg-black/40`}>
+                    <div className="w-10 text-center">Move</div>
                     <div className="w-10 text-center">#</div>
                     <div className="flex-1 px-2">Question</div>
                     <div className="w-24 hidden md:block px-2">Difficulty</div>
@@ -405,7 +472,18 @@ export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame, currentTh
                     ) : (
                         <div className="divide-y divide-white/5">
                             {manualQuestions.map((q, idx) => (
-                                <div key={idx} className="flex items-center p-3 hover:bg-white/5 transition-colors group text-sm">
+                                <div 
+                                    key={idx} 
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, idx)}
+                                    onDragEnter={() => handleDragEnter(idx)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    className={`flex items-center p-3 hover:bg-white/5 transition-colors group text-sm cursor-move ${draggedItemIndex === idx ? 'bg-white/10' : ''}`}
+                                >
+                                    <div className={`w-10 text-center opacity-30 group-hover:opacity-100 cursor-grab active:cursor-grabbing ${theme.textMain}`}>
+                                        <IconGrip className="w-4 h-4 mx-auto" />
+                                    </div>
                                     <div className={`w-10 text-center font-mono opacity-50 ${theme.textMain}`}>{idx + 1}</div>
                                     <div className="flex-1 px-2 min-w-0">
                                         <div className={`truncate font-medium ${theme.textMain} mb-0.5`} title={q.question}>
